@@ -15,7 +15,7 @@ def lambda_handler(event, context):
     _aws_request_id = context.client_context.custom['bedrockAgentCoreAwsRequestId']
     _mcp_message_id = context.client_context.custom['bedrockAgentCoreMcpMessageId']
     _gateway_id = context.client_context.custom['bedrockAgentCoreGatewayId']
-    target_id = context.client_context.custom['bedrockAgentCoreTargetId']
+    _target_id = context.client_context.custom['bedrockAgentCoreTargetId']
 
     # Process the request based on the tool name
     if tool_name == 'get_weather':

@@ -374,7 +374,7 @@ def update_policy(event: Dict[str, Any], properties: Dict[str, Any]) -> Dict[str
 
             definition = {"cedar": {"statement": policy_statement}}
 
-            update_response = client.update_policy(
+            _update_response = client.update_policy(
                 policyEngineId=policy_engine_id,
                 policyId=policy_id,
                 policy_description=policy_description,
