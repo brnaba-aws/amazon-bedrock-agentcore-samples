@@ -31,7 +31,8 @@ def lambda_handler(event, context):
 
         # Add custom claims to the ID token
         # Note: You can add to claimsOverrideDetails for ID token
-        if 'claimsOverrideDetails' not in event['response'] or event['response']['claimsOverrideDetails'] is None:
+        if ('claimsOverrideDetails' not in event['response'] or
+                event['response']['claimsOverrideDetails'] is None):
             event['response']['claimsOverrideDetails'] = {}
 
         if 'claimsToAddOrOverride' not in event['response']['claimsOverrideDetails']:
@@ -42,20 +43,23 @@ def lambda_handler(event, context):
         event['response']['claimsOverrideDetails']['claimsToAddOrOverride']['email'] = email
 
         # Add custom claims to the Access token (V2 trigger)
-        if 'claimsAndScopeOverrideDetails' not in event['response'] or event['response']['claimsAndScopeOverrideDetails'] is None:
+        if ('claimsAndScopeOverrideDetails' not in event['response'] or
+                event['response']['claimsAndScopeOverrideDetails'] is None):
             event['response']['claimsAndScopeOverrideDetails'] = {}
 
         if 'accessTokenGeneration' not in event['response']['claimsAndScopeOverrideDetails']:
             event['response']['claimsAndScopeOverrideDetails']['accessTokenGeneration'] = {}
 
-        if 'claimsToAddOrOverride' not in event['response']['claimsAndScopeOverrideDetails']['accessTokenGeneration']:
+        if ('claimsToAddOrOverride' not in
+                event['response']['claimsAndScopeOverrideDetails']['accessTokenGeneration']):
             event['response']['claimsAndScopeOverrideDetails']['accessTokenGeneration']['claimsToAddOrOverride'] = {}
 
         # Add email and user_tag to access token
         event['response']['claimsAndScopeOverrideDetails']['accessTokenGeneration']['claimsToAddOrOverride']['email'] = email
         event['response']['claimsAndScopeOverrideDetails']['accessTokenGeneration']['claimsToAddOrOverride']['user_tag'] = custom_tag
 
-        logger.info(f"Added custom claims to ID token and Access token: user_tag={custom_tag}, email={email}")
+        logger.info(f"Added custom claims to ID token and Access token: "
+                    f"user_tag={custom_tag}, email={email}")
 
     except Exception as e:
         logger.error(f"Error in pre-token generation: {str(e)}", exc_info=True)
