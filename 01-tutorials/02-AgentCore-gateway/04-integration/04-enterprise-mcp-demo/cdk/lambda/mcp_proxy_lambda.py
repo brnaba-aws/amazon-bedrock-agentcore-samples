@@ -204,7 +204,7 @@ def handle_callback(event):
     encoded_state = params.get("state", "")
     error = params.get("error", "")
 
-    print(f"=== HANDLE_CALLBACK DEBUG ===")
+    print("=== HANDLE_CALLBACK DEBUG ===")
     print(f"Code: {code}")
     print(f"State (URL encoded): {encoded_state}")
     print(f"Error: {error}")
@@ -234,10 +234,10 @@ def handle_callback(event):
 
         print(f"Original state: {original_state}")
         print(f"Original redirect_uri: {original_redirect_uri}")
-        print(f"=== END HANDLE_CALLBACK DEBUG ===")
+        print("=== END HANDLE_CALLBACK DEBUG ===")
     except Exception as e:
         print(f"Error decoding state: {e}, state={encoded_state}")
-        print(f"=== END HANDLE_CALLBACK DEBUG (ERROR) ===")
+        print("=== END HANDLE_CALLBACK DEBUG (ERROR) ===")
         return json_response(400, {"error": "Invalid state parameter"})
 
     if not original_redirect_uri:
@@ -398,7 +398,7 @@ def proxy_to_gateway(event):
         gateway_base = GATEWAY_URL[:-4] if GATEWAY_URL.endswith("/mcp") else GATEWAY_URL
         error_rewritten = error.replace(gateway_base, api_url)
         if error != error_rewritten:
-            print(f"Rewrote Gateway URL in error body")
+            print("Rewrote Gateway URL in error body")
 
         resp_headers = {"Content-Type": "application/json"}
 
