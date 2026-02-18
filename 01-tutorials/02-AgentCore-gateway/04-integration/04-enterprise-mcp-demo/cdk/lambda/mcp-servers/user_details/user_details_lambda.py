@@ -11,10 +11,10 @@ def lambda_handler(event, context):
     tool_name = originalToolName[originalToolName.index(delimiter) + len(delimiter):]
 
     # Get other context properties
-    message_version = context.client_context.custom['bedrockAgentCoreMessageVersion']
-    aws_request_id = context.client_context.custom['bedrockAgentCoreAwsRequestId']
-    mcp_message_id = context.client_context.custom['bedrockAgentCoreMcpMessageId']
-    gateway_id = context.client_context.custom['bedrockAgentCoreGatewayId']
+    _message_version = context.client_context.custom['bedrockAgentCoreMessageVersion']
+    _aws_request_id = context.client_context.custom['bedrockAgentCoreAwsRequestId']
+    _mcp_message_id = context.client_context.custom['bedrockAgentCoreMcpMessageId']
+    _gateway_id = context.client_context.custom['bedrockAgentCoreGatewayId']
     target_id = context.client_context.custom['bedrockAgentCoreTargetId']
 
     # Process the request based on the tool name
