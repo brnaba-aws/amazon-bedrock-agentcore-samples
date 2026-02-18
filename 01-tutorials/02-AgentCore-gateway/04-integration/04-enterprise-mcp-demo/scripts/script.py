@@ -34,37 +34,41 @@ for el in output.split("\n"):
 
 
 # Users to create - using email as username for Cognito
-users = [{
-    'COGNITO_USERNAME': "vscode-admin@example.com",
-    'COGNITO_PASSWORD': "TempPassword123!"
-},
-{
-    'COGNITO_USERNAME': "vscode-user@example.com",
-    'COGNITO_PASSWORD': "TempPassword1234!"
-}]
+users = [
+    {
+        "COGNITO_USERNAME": "vscode-admin@example.com",
+        "COGNITO_PASSWORD": "TempPassword123!",
+    },
+    {
+        "COGNITO_USERNAME": "vscode-user@example.com",
+        "COGNITO_PASSWORD": "TempPassword1234!",
+    },
+]
 
 cognito = boto3.client("cognito-idp")
 user_pool_id = config["UserPoolId"]
 
 # Create users with email as username
 for user in users:
-    COGNITO_USERNAME = user['COGNITO_USERNAME']
-    COGNITO_PASSWORD = user['COGNITO_PASSWORD']
+    COGNITO_USERNAME = user["COGNITO_USERNAME"]
+    COGNITO_PASSWORD = user["COGNITO_PASSWORD"]
     try:
         # Create user with email as username
         cognito.admin_create_user(
-        UserPoolId=user_pool_id,
-        Username=COGNITO_USERNAME,
-        TemporaryPassword=COGNITO_PASSWORD,
-        MessageAction='SUPPRESS',
-        UserAttributes=[
-            {'Name': 'email', 'Value': f'{COGNITO_USERNAME}'},
-            {'Name': 'email_verified', 'Value': 'true'}
-        ]
-    )
+            UserPoolId=user_pool_id,
+            Username=COGNITO_USERNAME,
+            TemporaryPassword=COGNITO_PASSWORD,
+            MessageAction="SUPPRESS",
+            UserAttributes=[
+                {"Name": "email", "Value": f"{COGNITO_USERNAME}"},
+                {"Name": "email_verified", "Value": "true"},
+            ],
+        )
         cognito.admin_set_user_password(
-            UserPoolId=user_pool_id, Username=COGNITO_USERNAME,
-            Password=COGNITO_PASSWORD, Permanent=True
+            UserPoolId=user_pool_id,
+            Username=COGNITO_USERNAME,
+            Password=COGNITO_PASSWORD,
+            Permanent=True,
         )
         print(f"✓ User created: {user['COGNITO_USERNAME']}")
     except cognito.exceptions.UsernameExistsException:

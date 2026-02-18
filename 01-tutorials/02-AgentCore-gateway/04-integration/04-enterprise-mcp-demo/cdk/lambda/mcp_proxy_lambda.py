@@ -49,7 +49,9 @@ def lambda_handler(event, context):
     # ALB uses: path, httpMethod
     # HTTP API uses: rawPath, requestContext.http.method
     path = event.get("path") or event.get("rawPath", "/")
-    method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method", "GET")
+    method = event.get("httpMethod") or event.get("requestContext", {}).get(
+        "http", {}
+    ).get("method", "GET")
 
     print(f"Method: {method}, Path: {path}")
 
@@ -57,14 +59,17 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": {"Allow": "OPTIONS, GET, POST"},
-            "body": ""
+            "body": "",
         }
     # Route to appropriate handler
     if path == "/ping":
         return handle_ping(event)
     elif path.startswith("/.well-known/oauth-authorization-server"):
         return handle_oauth_metadata(event)
-    elif path == "/.well-known/oauth-protected-resource" or path == "/.well-known/oauth-protected-resource/mcp":
+    elif (
+        path == "/.well-known/oauth-protected-resource"
+        or path == "/.well-known/oauth-protected-resource/mcp"
+    ):
         return handle_protected_resource_metadata(event)
     elif path == "/authorize":
         return handle_authorize(event)
@@ -77,10 +82,7 @@ def lambda_handler(event, context):
     elif path == "/mcp":
         return proxy_to_gateway(event)
     else:
-        return {
-            "statusCode": 404,
-            "body": json.dumps({"error": "Not found"})
-        }
+        return {"statusCode": 404, "body": json.dumps({"error": "Not found"})}
 
 
 def handle_ping(event):
@@ -88,7 +90,7 @@ def handle_ping(event):
     return {
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps({"status": "healthy", "service": "mcp-proxy"})
+        "body": json.dumps({"status": "healthy", "service": "mcp-proxy"}),
     }
 
 
@@ -303,7 +305,9 @@ def proxy_to_gateway(event):
     """Forward MCP requests to AgentCore Gateway."""
     print("proxy_to_gateway")
     path = event.get("path", "/")
-    method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method", "GET")
+    method = event.get("httpMethod") or event.get("requestContext", {}).get(
+        "http", {}
+    ).get("method", "GET")
     headers = event.get("headers", {})
     body = event.get("body", "")
     print(f"Proxying to gateway - Method: {method}, Path: {path}")
@@ -378,7 +382,9 @@ def proxy_to_gateway(event):
                 api_url = get_api_url(event)
                 # Replace any Gateway URL references with ALB URL
                 # Use removesuffix or string slicing to properly remove /mcp suffix
-                gateway_base = GATEWAY_URL[:-4] if GATEWAY_URL.endswith("/mcp") else GATEWAY_URL
+                gateway_base = (
+                    GATEWAY_URL[:-4] if GATEWAY_URL.endswith("/mcp") else GATEWAY_URL
+                )
                 www_auth_rewritten = www_auth.replace(gateway_base, api_url)
                 resp_headers["WWW-Authenticate"] = www_auth_rewritten
                 print(f"Rewrote WWW-Authenticate: {www_auth} -> {www_auth_rewritten}")
@@ -407,7 +413,9 @@ def proxy_to_gateway(event):
         if www_auth:
             www_auth_rewritten = www_auth.replace(gateway_base, api_url)
             resp_headers["WWW-Authenticate"] = www_auth_rewritten
-            print(f"Rewrote WWW-Authenticate in error: {www_auth} -> {www_auth_rewritten}")
+            print(
+                f"Rewrote WWW-Authenticate in error: {www_auth} -> {www_auth_rewritten}"
+            )
 
         return {
             "statusCode": e.code,
@@ -424,6 +432,7 @@ def is_elicitation(data):
         return False
     error = data.get("error", {})
     return isinstance(error, dict) and error.get("code") == -32042
+
 
 def get_api_url(event):
     """Extract API URL from event (supports both ALB and API Gateway)."""
