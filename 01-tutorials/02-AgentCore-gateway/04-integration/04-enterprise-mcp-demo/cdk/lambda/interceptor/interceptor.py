@@ -258,7 +258,7 @@ def lambda_handler(event, context):
                             "type": "text",
                             "text": guardrail_text,
                         }
-                        statusCode = 403
+                        statusCode = 200
                         response = {
                             "interceptorOutputVersion": "1.0",
                             "mcp": {
