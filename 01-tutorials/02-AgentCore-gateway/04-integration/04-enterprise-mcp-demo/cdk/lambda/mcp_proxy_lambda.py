@@ -415,25 +415,52 @@ async function checkMcpAuth(accessToken, idToken) {{
   list.innerHTML = "";
 
   try {{
-    // Step 1: Discover all available tools via tools/list (use access token)
+    // Step 1: Discover all available tools via tools/list with pagination (use access token)
     log("3-MCP", "Calling tools/list to discover available tools...");
-    const toolsListResp = await fetch(CONFIG.apiUrl + "/mcp", {{
-      method: "POST",
-      headers: {{
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + accessToken,
-        "Mcp-Protocol-Version": "2025-11-25",
-      }},
-      body: JSON.stringify({{ jsonrpc: "2.0", id: 1, method: "tools/list" }}),
-    }});
+    const allTools = [];
+    let cursor = undefined;
+    let pageCount = 0;
 
-    const toolsListData = await toolsListResp.json();
-    if (toolsListData.error) {{
-      throw new Error("tools/list failed: " + toolsListData.error.message);
-    }}
+    do {{
+      pageCount++;
+      const requestBody = {{
+        jsonrpc: "2.0",
+        id: pageCount,
+        method: "tools/list"
+      }};
 
-    const tools = toolsListData.result?.tools || [];
-    log("3-MCP", "Discovered tools", {{ count: tools.length }});
+      if (cursor) {{
+        requestBody.params = {{ cursor: cursor }};
+      }}
+
+      const toolsListResp = await fetch(CONFIG.apiUrl + "/mcp", {{
+        method: "POST",
+        headers: {{
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + accessToken,
+          "Mcp-Protocol-Version": "2025-11-25",
+        }},
+        body: JSON.stringify(requestBody),
+      }});
+
+      const toolsListData = await toolsListResp.json();
+      if (toolsListData.error) {{
+        throw new Error("tools/list failed: " + toolsListData.error.message);
+      }}
+
+      const pageTools = toolsListData.result?.tools || [];
+      allTools.push(...pageTools);
+      cursor = toolsListData.result?.nextCursor;
+
+      log("3-MCP", `Discovered tools (page ${{pageCount}})`, {{
+        pageTools: pageTools.length,
+        totalTools: allTools.length,
+        hasMore: !!cursor
+      }});
+    }} while (cursor);
+
+    const tools = allTools;
+    log("3-MCP", "Discovered all tools", {{ count: tools.length, pages: pageCount }});
 
     // Step 2: Group tools by target (prefix before ___)
     const targetMap = new Map();
@@ -568,9 +595,31 @@ async function checkTargetAuth(accessToken, idToken, target, tool, card) {{
     log("4-AUTH-CHECK", "Response for " + target, {{
       hasResult: !!mcpData.result,
       hasError: !!mcpData.error,
+      isError: mcpData.result?.isError,
       errorCode: mcpData.error ? mcpData.error.code : "(none)",
       errorMessage: mcpData.error ? mcpData.error.message?.substring(0, 100) : "(none)",
     }});
+
+    // Check for MCP server errors in result.isError (server unreachable, etc.)
+    if (mcpData.result?.isError && mcpData.result.content) {{
+      const errorText = mcpData.result.content
+        .filter(c => c.type === "text")
+        .map(c => c.text)
+        .join(" ");
+
+      log("4-AUTH-CHECK", "⚠️ MCP server error for " + target, {{
+        _err: true,
+        errorText: errorText,
+      }});
+
+      card.querySelector(".status").className = "status status-error";
+      card.querySelector(".status").textContent = "Server Error";
+      const errP = document.createElement("p");
+      errP.style.cssText = "color:#dc3545;font-size:0.85rem;margin-top:0.5rem;";
+      errP.textContent = errorText;
+      card.querySelector(".provider-info").appendChild(errP);
+      return;
+    }}
 
     // Check for validation errors (means our test args are bad)
     if (mcpData.error && (mcpData.error.code === -32602 || mcpData.error.message?.includes("validation failed"))) {{
