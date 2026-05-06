@@ -1188,7 +1188,7 @@ export class EnterpriseMcpInfraStack extends cdk.Stack {
     });
 
     const gateway = new agentcore.Gateway(this, "AgentCoreMcpGateway", {
-      gatewayName: `agentcore-mcp-gateway-${this.account}`,
+      gatewayName: `agentcore-mcp-gateway-${this.account}-${this.region}`,
       description: "AgentCore Gateway for VS Code IDE integration",
       protocolConfiguration: agentcore.GatewayProtocol.mcp({
         searchType: agentcore.McpGatewaySearchType.SEMANTIC,
@@ -1452,7 +1452,7 @@ def handler(event, context):
     });
 
     // Add policies to the engine FIRST
-    const policyEngineStatementInventoryTool = `permit (principal is AgentCore::OAuthUser, action in [AgentCore::Action::"inventory-tool", AgentCore::Action::"weather-tool"],resource == AgentCore::Gateway::"${gateway.gatewayArn}") when {principal.hasTag("user_tag") && principal.getTag("user_tag") == "admin_user"};`;
+    const policyEngineStatementInventoryTool = `permit (principal is AgentCore::OAuthUser, action ,resource == AgentCore::Gateway::"${gateway.gatewayArn}") when {principal.hasTag("user_tag") && principal.getTag("user_tag") == "admin_user"};`;
     const policyEngineStatementWeatherTool = `permit (principal is AgentCore::OAuthUser,action in [AgentCore::Action::"weather-tool"],resource == AgentCore::Gateway::"${gateway.gatewayArn}") when {principal.hasTag("user_tag") && principal.getTag("user_tag") == "regular_user"};`;
     const policyEngineStatementUserDetailsTool = `permit (principal is AgentCore::OAuthUser,action in [AgentCore::Action::"user-details-tool"],resource == AgentCore::Gateway::"${gateway.gatewayArn}") when {principal.hasTag("user_tag")};`;
 
@@ -1478,7 +1478,7 @@ def handler(event, context):
     );
 
     // Associate with gateway AFTER all policies are added
-    agentCorePolicyEngine.associateWithGateway(gateway.gatewayId, 'LOG_ONLY');
+    agentCorePolicyEngine.associateWithGateway(gateway.gatewayId, 'ENFORCE');
     agentCorePolicyEngine.node.addDependency(interceptorLambda); // Ensure interceptor Lambda is created before policy engine association
 
     // Ensure the gateway VPC resource policy is applied after all Cedar policies
