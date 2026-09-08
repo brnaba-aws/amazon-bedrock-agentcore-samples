@@ -974,6 +974,7 @@ export class EnterpriseMcpInfraStack extends cdk.Stack {
           hostHeaderCondition,
           elbv2.ListenerCondition.pathPatterns([
             "/.well-known/oauth-authorization-server",
+            "/.well-known/oauth-authorization-server/*",
           ]),
         ],
         targetGroups: [proxyTargetGroup],
@@ -983,8 +984,13 @@ export class EnterpriseMcpInfraStack extends cdk.Stack {
         priority: 50,
         conditions: [
           hostHeaderCondition,
+          // The path-inserted form (RFC 9728) carries the resource path, e.g.
+          // /.well-known/oauth-protected-resource/figma/mcp.  It must be matched
+          // here (priority 50) so it wins over the "/*/mcp" MCP rule below,
+          // which would otherwise proxy the metadata lookup to the Gateway.
           elbv2.ListenerCondition.pathPatterns([
             "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-protected-resource/*",
           ]),
         ],
         targetGroups: [proxyTargetGroup],

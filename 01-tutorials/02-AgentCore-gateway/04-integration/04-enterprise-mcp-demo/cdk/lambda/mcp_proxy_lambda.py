@@ -6,6 +6,7 @@ This Lambda function replaces the local mcp_oauth_proxy.py script, enabling serv
 
 import json
 import os
+import re
 import time
 import base64
 import urllib.request
@@ -30,6 +31,9 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "")
 CALLBACK_LAMBDA_URL = os.environ.get("CALLBACK_LAMBDA_URL", "")
 RESOURCE_SERVER_ID = os.environ.get("RESOURCE_SERVER_ID", "")
 MCP_METADATA_KEY = os.environ.get("MCP_METADATA_KEY", "com.example/target")
+
+# RFC 9728 well-known prefix for Protected Resource Metadata
+PROTECTED_RESOURCE_PREFIX = "/.well-known/oauth-protected-resource"
 
 # Auth onboarding config
 AUTH_ONBOARDING_ROLE_ARN = os.environ.get("AUTH_ONBOARDING_ROLE_ARN", "")
@@ -89,10 +93,9 @@ def lambda_handler(event, context):
         return handle_auth_callback_page(event)
     elif path.startswith("/.well-known/oauth-authorization-server"):
         return handle_oauth_metadata(event)
-    elif (
-        path == "/.well-known/oauth-protected-resource"
-        or path == "/.well-known/oauth-protected-resource/mcp"
-    ):
+    # Must be checked before the "/mcp" route below: the path-inserted form
+    # (/.well-known/oauth-protected-resource/figma/mcp) also ends with "/mcp".
+    elif path.startswith(PROTECTED_RESOURCE_PREFIX):
         return handle_protected_resource_metadata(event)
     elif path == "/authorize":
         return handle_authorize(event)
@@ -1267,15 +1270,30 @@ def handle_oauth_metadata(event):
 
 
 def handle_protected_resource_metadata(event):
-    """Serve OAuth Protected Resource Metadata."""
-    api_url = get_api_url(event)
+    """Serve OAuth Protected Resource Metadata (RFC 9728).
 
-    # Per RFC 9728, the 'resource' must match the URL where clients access the service
-    # This should be the ALB endpoint, not the Gateway endpoint
+    The resource path is derived from the request path so that per-target
+    endpoints work.  Per RFC 9728 a client connecting to
+    https://host/figma/mcp looks up metadata at
+    https://host/.well-known/oauth-protected-resource/figma/mcp, and rejects the
+    response if 'resource' is not the URL it connected to.  Hardcoding /mcp here
+    makes every target other than the default one fail with
+    "Protected resource ... does not match expected ...".
+    """
+    api_url = get_api_url(event)
+    path = event.get("path") or event.get("rawPath", "/")
+
+    # Everything after the well-known prefix is the resource path
+    # ("/figma/mcp", "/weather-tool/mcp", or "" for the bare lookup).
+    suffix = path[len(PROTECTED_RESOURCE_PREFIX) :].strip("/")
+    resource_path = f"/{suffix}" if suffix else "/mcp"
+    logger.debug(f"Protected resource metadata for path {path} -> {resource_path}")
+
+    # The resource is the ALB endpoint, not the Gateway endpoint
     return json_response(
         200,
         {
-            "resource": f"{api_url}/mcp",
+            "resource": f"{api_url}{resource_path}",
             "authorization_servers": [api_url],
             "bearer_methods_supported": ["header"],
             "scopes_supported": [
@@ -1623,16 +1641,8 @@ def proxy_to_gateway(event):
             # Rewrite Gateway URLs in WWW-Authenticate header to use ALB endpoint
             www_auth = resp.headers.get("WWW-Authenticate")
             if www_auth:
-                api_url = get_api_url(event)
-                # Replace any Gateway URL references with ALB URL
-                # Use removesuffix or string slicing to properly remove /mcp suffix
-                gateway_base = (
-                    GATEWAY_URL[:-4] if GATEWAY_URL.endswith("/mcp") else GATEWAY_URL
-                )
-                www_auth_rewritten = www_auth.replace(gateway_base, api_url)
-                resp_headers["WWW-Authenticate"] = www_auth_rewritten
-                logger.debug(
-                    f"Rewrote WWW-Authenticate: {www_auth} -> {www_auth_rewritten}"
+                resp_headers["WWW-Authenticate"] = rewrite_www_authenticate(
+                    www_auth, get_api_url(event), path
                 )
 
             return {
@@ -1646,9 +1656,7 @@ def proxy_to_gateway(event):
 
         # Rewrite any Gateway URLs in error response body
         api_url = get_api_url(event)
-        # Use string slicing to properly remove /mcp suffix
-        gateway_base = GATEWAY_URL[:-4] if GATEWAY_URL.endswith("/mcp") else GATEWAY_URL
-        error_rewritten = error.replace(gateway_base, api_url)
+        error_rewritten = error.replace(gateway_base_url(), api_url)
         if error != error_rewritten:
             logger.debug("Rewrote Gateway URL in error body")
 
@@ -1657,10 +1665,8 @@ def proxy_to_gateway(event):
         # Rewrite WWW-Authenticate header if present
         www_auth = e.headers.get("WWW-Authenticate")
         if www_auth:
-            www_auth_rewritten = www_auth.replace(gateway_base, api_url)
-            resp_headers["WWW-Authenticate"] = www_auth_rewritten
-            logger.debug(
-                f"Rewrote WWW-Authenticate in error: {www_auth} -> {www_auth_rewritten}"
+            resp_headers["WWW-Authenticate"] = rewrite_www_authenticate(
+                www_auth, api_url, path
             )
 
         return {
@@ -1670,6 +1676,36 @@ def proxy_to_gateway(event):
         }
     except Exception as e:
         return json_response(502, {"error": {"code": -32603, "message": str(e)}})
+
+
+def gateway_base_url():
+    """GATEWAY_URL without its trailing /mcp."""
+    return GATEWAY_URL[:-4] if GATEWAY_URL.endswith("/mcp") else GATEWAY_URL
+
+
+def rewrite_www_authenticate(www_auth, api_url, path):
+    """Point a Gateway 401 challenge at this proxy, for the path that was called.
+
+    Besides swapping the Gateway host for the ALB host, the resource_metadata URL
+    is rewritten to the path-inserted form (RFC 9728) for the request path.  The
+    Gateway always advertises the bare /.well-known/oauth-protected-resource
+    document, which names <host>/mcp as its resource -- a client that connected to
+    /weather-tool/mcp follows resource_metadata, sees the wrong resource and fails
+    with "Protected resource ... does not match expected ...".
+    """
+    rewritten = www_auth.replace(gateway_base_url(), api_url)
+
+    metadata_url = f"{api_url}{PROTECTED_RESOURCE_PREFIX}/{path.strip('/')}"
+    rewritten, count = re.subn(
+        r'resource_metadata="[^"]*"',
+        lambda _: f'resource_metadata="{metadata_url}"',
+        rewritten,
+    )
+    if not count:
+        rewritten = f'{rewritten}, resource_metadata="{metadata_url}"'
+
+    logger.debug(f"Rewrote WWW-Authenticate: {www_auth} -> {rewritten}")
+    return rewritten
 
 
 def is_elicitation(data):
